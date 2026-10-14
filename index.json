@@ -1,10 +1,8 @@
 [
   {
-    "name": "瓜子漫畫",
-    "fileName": "guazimanhua.js",
-    "filename": "guazimanhua.js",
-    "key": "guazimanhua",
-    "version": "1.0.0",
-    "description": "瓜子漫畫 guazimanhua.com 的 Venera 自訂漫畫源"
+    "name": "漫畫160",
+    "filename": "mh160mh.js",
+    "version": "0.1.0",
+    "description": "mh160mh.com 的 Venera 自訂漫畫源（測試版；章節圖片及搜尋待實機驗證）"
   }
 ]
