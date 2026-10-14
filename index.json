@@ -2,7 +2,7 @@
   {
     "name": "漫畫160",
     "url": "https://raw.githubusercontent.com/valvenis201/venera-guazimanhua/mh160mh/mh160mh.js",
-    "version": "0.1.2",
-    "description": "漫畫160 Venera 自訂漫畫源（章節 Base64 解析測試版）"
+    "version": "0.1.3",
+    "description": "漫畫160 Venera 自訂漫畫源（修正 /statics/search.aspx?key 搜尋）"
   }
 ]

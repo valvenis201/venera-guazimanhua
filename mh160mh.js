@@ -3,7 +3,7 @@
 class Mh160mh extends ComicSource {
     name = "漫畫160"
     key = "mh160mh"
-    version = "0.1.2"
+    version = "0.1.3"
     minAppVersion = "1.6.0"
     url = "https://raw.githubusercontent.com/valvenis201/venera-guazimanhua/mh160mh/mh160mh.js"
 
@@ -127,7 +127,9 @@ class Mh160mh extends ComicSource {
 
     parseComicList(doc, pageUrl = this.baseUrl, limit = 60) {
         const found = new Map()
-        for (const link of doc.querySelectorAll("a[href*='/kanmanhua/']")) {
+        // 搜尋結果可能使用相對路徑（如 kanmanhua/xxx/ 或 ../kanmanhua/xxx/）。
+        // 先抓全部連結，再由 comicId() 嚴格判斷是否漫畫詳情頁。
+        for (const link of doc.querySelectorAll("a[href]")) {
             const id = this.comicId(this.absoluteUrl(this.attr(link, "href"), pageUrl))
             if (!id) continue
             const title = this.text(link) || this.attr(link, "title") || this.attr(link.querySelector?.("img"), "alt")
@@ -196,76 +198,29 @@ class Mh160mh extends ComicSource {
         optionList: [],
     }
 
-    async discoverSearchForm() {
-        try {
-            const { doc, url } = await this.getPage("/")
-            for (const form of doc.querySelectorAll("form")) {
-                for (const input of form.querySelectorAll("input")) {
-                    const fields = `${this.attr(input, "placeholder")} ${this.attr(input, "name")} ${this.attr(input, "id")}`
-                    if (!/(?:搜索|搜尋|漫画名|作者|search|keyword|\bwd\b|\bkey\b|\bq\b)/i.test(fields)) continue
-                    const field = this.attr(input, "name")
-                    if (!field) continue
-                    return {
-                        action: this.absoluteUrl(this.attr(form, "action") || "/", url),
-                        method: (this.attr(form, "method") || "GET").toUpperCase(), field,
-                    }
-                }
-            }
-        } catch (_) { /* 網站首頁可能限制存取，仍可嘗試已知候選路徑 */ }
-        return null
+    // 已由漫畫160瀏覽器搜尋結果網址確認 GET /statics/search.aspx?key=關鍵字。
+    // 不再猜測不存在的 /kanmanhua/search/、/search 路徑。
+    searchPath(keyword) {
+        return `/statics/search.aspx?key=${encodeURIComponent(String(keyword || "").trim())}`
     }
 
-    async trySearch(url, keyword, page) {
-        const { doc, url: finalUrl } = await this.getPage(url)
-        const matches = this.parseComicList(doc, finalUrl, 100)
-        const relevant = matches.filter(comic => comic.title.toLowerCase().includes(keyword.toLowerCase()))
-        // 避免把未執行搜尋的首頁/分類頁誤認為搜尋結果。
-        if (!relevant.length) return null
-        return { comics: matches, maxPage: this.parseMaxPage(doc, page, "/kanmanhua/search") }
+    async loadSearch(keyword, page = 1) {
+        const kw = String(keyword || "").trim()
+        if (!kw) return { comics: [], maxPage: 1 }
+        // 搜尋分頁參數未經源站證實；保守地只開放第 1 頁。
+        if (Math.max(1, Number(page) || 1) > 1) return { comics: [], maxPage: 1 }
+
+        const { doc, url } = await this.getPage(this.searchPath(kw), `${this.mobileUrl}/`)
+        const comics = this.parseComicList(doc, url, 100)
+        // 源站有「大家都在搜」等推薦區，避免當成符合搜尋關鍵字的結果。
+        // 作者搜尋的真實 HTML 尚待確認，目前只保證漫畫名稱搜尋。
+        const term = kw.toLowerCase()
+        const matches = comics.filter(item => item.title.toLowerCase().includes(term))
+        return { comics: matches, maxPage: 1 }
     }
 
     search = {
-        load: async (keyword, options, page) => {
-            const kw = String(keyword || "").trim()
-            const p = Math.max(1, Number(page) || 1)
-            if (!kw) return { comics: [], maxPage: 1 }
-            const form = await this.discoverSearchForm()
-            if (form) {
-                const body = `${encodeURIComponent(form.field)}=${encodeURIComponent(kw)}&page=${p}`
-                if (form.method === "GET") {
-                    const sep = form.action.includes("?") ? "&" : "?"
-                    try {
-                        const found = await this.trySearch(`${form.action}${sep}${body}`, kw, p)
-                        if (found) return found
-                    } catch (_) {}
-                } else if (form.method === "POST") {
-                    try {
-                        const res = await Network.post(form.action, {
-                            ...this.headers(), "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-                        }, body)
-                        if (res.status === 200) {
-                            const doc = new HtmlDocument(res.body)
-                            const comics = this.parseComicList(doc, form.action)
-                            if (comics.some(item => item.title.toLowerCase().includes(kw.toLowerCase()))) {
-                                return { comics, maxPage: 1 }
-                            }
-                        }
-                    } catch (_) {}
-                }
-            }
-            // 候選路徑未經本站實際搜尋請求驗證；失敗時明確回報，避免顯示錯誤結果。
-            const escaped = encodeURIComponent(kw)
-            const candidates = [
-                `/kanmanhua/search/?keyword=${escaped}&page=${p}`,
-                `/kanmanhua/search/?key=${escaped}&page=${p}`,
-                `/kanmanhua/search/?q=${escaped}&page=${p}`,
-                `/search?keyword=${escaped}&page=${p}`,
-            ]
-            for (const candidate of candidates) {
-                try { const found = await this.trySearch(candidate, kw, p); if (found) return found } catch (_) {}
-            }
-            throw "漫畫160 搜尋介面尚未確認，請提供網站搜尋結果網址以修正搜尋功能。"
-        },
+        load: async (keyword, options, page) => this.loadSearch(keyword, page),
         optionList: [],
         enableTagsSuggestions: false,
     }

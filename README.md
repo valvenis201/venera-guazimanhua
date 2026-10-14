@@ -2,12 +2,12 @@
 
 - 來源網站：<https://m.mh160mh.com/>，桌面備援：<https://www.mh160mh.com/>
 - 來源識別碼（key）：`mh160mh`
-- 測試版：`0.1.2`，最低 Venera 版本：`1.6.0`
+- 測試版：`0.1.3`，最低 Venera 版本：`1.6.0`
 - 檔案：`mh160mh.js`、`index.json`
 
 ## 狀態
 
-這是可匯入 Venera 的**v0.1.2 修正版**，尚未通過 Venera App + 實際網站章節圖片的端對端驗證。網站在目前執行環境中無法直接使用 HTTP 取得完整的原始章節 HTML，因此程式先支援常見的 `img` lazy-load 與 JavaScript 陣列格式，不會把未取得的圖片臆造為有效內容。
+這是可匯入 Venera 的**v0.1.3 修正版**，尚未通過 Venera App + 實際網站章節圖片的端對端驗證。網站在目前執行環境中無法直接使用 HTTP 取得完整的原始章節 HTML，因此程式先支援常見的 `img` lazy-load 與 JavaScript 陣列格式，不會把未取得的圖片臆造為有效內容。
 
 | 功能 | 實作 | 驗證情況 |
 | --- | --- | --- |
@@ -66,7 +66,7 @@ node --test tests/*.test.cjs
 
 本程式僅提供公開頁面解析，不含任何漫畫素材，也不包含認證繞過或圖片鏡像。使用時應遵守網站條款及內容授權。
 
-## v0.1.2（2026-10-15）問題修正
+## v0.1.3（2026-10-15）問題修正
 
 - 依據 `log.txt` 修正縮圖空 URL 所造成的 `relative URL without a base`：若缺失原始封面，使用倉庫內 `assets/no-cover.png` 當作可辨識的保底封面。
 - 依據公開漫畫160腳本，章節圖片解析 `qTcms_S_m_murl_e`、`qTcms_S_p_id`；以 Venera 的 `Convert.decodeBase64` / `Convert.decodeUtf8` 解碼 `$qingtiandy$` 分隔路徑並套用站點圖片 CDN。
@@ -75,3 +75,13 @@ node --test tests/*.test.cjs
 - 本環境無法直接連線源站，實機仍可能遇到 CDN 限制。遇到頁面無法載入請保留新日誌供確認。
 
 參考：<https://github.com/venera-app/venera/blob/master/doc/comic_source.md>、<https://openuserjs.org/scripts/zsyjklive.cn/ComicLooms/source>。
+
+
+## v0.1.3 搜尋修復
+
+- 實際入口由使用者提供：`https://m.mh160mh.com/statics/search.aspx?key=天魔只想`，GET 查詢字串的 `key` 使用 `encodeURIComponent()`。
+- 移除原先虛構且回傳 HTTP 404 的 `/kanmanhua/search/` 與 `/search?keyword=` 搜尋猜測。
+- 支援搜尋結果漫畫連結為絕對、以 `/` 開頭與一般相對路徑。
+- 過濾網站的熱門推薦連結；第 2 頁參數未確認前只提供第 1 頁。
+- 新增搜尋請求、網址編碼、無結果與備援網域離線測試。
+- 搜尋結果 HTML 在測試環境尚無法從遠端取得，**仍需 Venera App 實際驗證**；如有作者搜尋/分頁需求需進一步檢查。

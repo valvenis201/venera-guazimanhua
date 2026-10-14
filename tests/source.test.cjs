@@ -137,3 +137,53 @@ test('相對章節連結可以解析', () => {
   const result = src.parseChapterLinks(doc, 'abc', 'https://m.mh160mh.com/kanmanhua/abc/')
   assert.deepEqual([...result.keys()], ['abc/124.html','abc/123.html'])
 })
+
+
+test('搜尋使用漫畫160真正的 /statics/search.aspx?key= 接口（中文 URL 編碼）', async () => {
+  const called = []
+  const original = src.getPage
+  try {
+    src.getPage = async (path) => {
+      called.push(path)
+      return { doc: docWithLinks([
+        anchor('/kanmanhua/tianmozhixiang/', '天魔只想苟住'),
+        anchor('/kanmanhua/yaoshenji/', '妖神記'),
+      ]), url: 'https://m.mh160mh.com' + path }
+    }
+    const result = await src.search.load('天魔只想', [], 1)
+    assert.deepEqual(called, ['/statics/search.aspx?key=%E5%A4%A9%E9%AD%94%E5%8F%AA%E6%83%B3'])
+    assert.deepEqual(Array.from(result.comics, item => item.id), ['tianmozhixiang'])
+    assert.equal(result.maxPage, 1)
+  } finally { src.getPage = original }
+})
+
+test('搜尋結果允許非絕對路徑的漫畫連結', () => {
+  const links = [anchor('kanmanhua/tianmo/', '天魔只想'), anchor('../kanmanhua/12094/', '風起蒼嵐')]
+  const comics = src.parseComicList(docWithLinks(links), 'https://m.mh160mh.com/statics/search.aspx?key=test')
+  assert.deepEqual(Array.from(comics, item => item.id), ['tianmo', '12094'])
+})
+
+test('空搜尋與無結果安全回傳，未經證實的第 2 頁不會發出網路請求', async () => {
+  const original = src.getPage
+  let count = 0
+  try {
+    src.getPage = async (path) => { count++; return { doc: docWithLinks([]), url: src.mobileUrl + path } }
+    assert.equal((await src.search.load('不存在的作品', [], 1)).comics.length, 0)
+    assert.equal((await src.search.load('天魔只想', [], 2)).comics.length, 0)
+    assert.equal((await src.search.load(' ', [], 1)).comics.length, 0)
+    assert.equal(count, 1)
+  } finally { src.getPage = original }
+})
+
+test('來源發送行動版真實搜尋路徑，保留 www 域名作為備援', async () => {
+  const prior = responder
+  requests.length = 0
+  try {
+    responder = url => url.includes('m.mh160mh.com') ? { status: 404, body: 'not found' } : { status: 200, body: '<html>ok</html>' }
+    await src.getPage(src.searchPath('天魔只想'))
+    assert.deepEqual(requests.map(x => x.url), [
+      'https://m.mh160mh.com/statics/search.aspx?key=%E5%A4%A9%E9%AD%94%E5%8F%AA%E6%83%B3',
+      'https://www.mh160mh.com/statics/search.aspx?key=%E5%A4%A9%E9%AD%94%E5%8F%AA%E6%83%B3',
+    ])
+  } finally { responder = prior }
+})
