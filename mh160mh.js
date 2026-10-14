@@ -3,7 +3,7 @@
 class Mh160mh extends ComicSource {
     name = "漫畫160"
     key = "mh160mh"
-    version = "0.1.0"
+    version = "0.1.1"
     minAppVersion = "1.6.0"
     url = "https://raw.githubusercontent.com/valvenis201/venera-guazimanhua/mh160mh/mh160mh.js"
 
