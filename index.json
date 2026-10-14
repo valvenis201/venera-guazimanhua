@@ -1,8 +1,9 @@
 [
   {
     "name": "漫畫160",
-    "filename": "mh160mh.js",
-    "version": "0.1.0",
-    "description": "mh160mh.com 的 Venera 自訂漫畫源（測試版；章節圖片及搜尋待實機驗證）"
+    "fileName": "mh160mh.js",
+    "key": "mh160mh",
+    "version": "0.1.1",
+    "description": "mh160mh.com 的 Venera 自訂漫畫源（測試版；搜尋及章節圖片尚待實機驗證）"
   }
 ]
