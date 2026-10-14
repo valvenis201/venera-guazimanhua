@@ -1,9 +1,8 @@
 [
   {
     "name": "漫畫160",
-    "fileName": "mh160mh.js",
-    "key": "mh160mh",
-    "version": "0.1.1",
-    "description": "mh160mh.com 的 Venera 自訂漫畫源（測試版；搜尋及章節圖片尚待實機驗證）"
+    "url": "https://raw.githubusercontent.com/valvenis201/venera-guazimanhua/mh160mh/mh160mh.js",
+    "version": "0.1.2",
+    "description": "漫畫160 Venera 自訂漫畫源（章節 Base64 解析測試版）"
   }
 ]

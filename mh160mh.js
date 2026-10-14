@@ -3,11 +3,13 @@
 class Mh160mh extends ComicSource {
     name = "漫畫160"
     key = "mh160mh"
-    version = "0.1.1"
+    version = "0.1.2"
     minAppVersion = "1.6.0"
     url = "https://raw.githubusercontent.com/valvenis201/venera-guazimanhua/mh160mh/mh160mh.js"
 
     baseUrl = "https://www.mh160mh.com"
+    // 保底封面：不再傳入空 URL 導致 Venera 的 relative URL without a base。
+    fallbackCover = "https://raw.githubusercontent.com/valvenis201/venera-guazimanhua/mh160mh/assets/no-cover.png"
     mobileUrl = "https://m.mh160mh.com"
     userAgent = "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
 
@@ -16,7 +18,7 @@ class Mh160mh extends ComicSource {
             "user-agent": this.userAgent,
             "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "accept-language": "zh-CN,zh;q=0.9,zh-TW;q=0.8",
-            "referer": referer || `${this.baseUrl}/`,
+            "referer": referer || `${this.mobileUrl}/`,
         }
     }
 
@@ -82,7 +84,8 @@ class Mh160mh extends ComicSource {
 
     async getPage(path, referer = null) {
         // 網站同時提供桌面與行動網域；發生 HTTP/網路問題時再嘗試另一網域。
-        const urls = [this.absoluteUrl(path, this.baseUrl), this.absoluteUrl(path, this.mobileUrl)]
+        // 漫畫160 的章節圖資料由手機版頁面的 qTcms_S_m_murl_e 提供。
+        const urls = [this.absoluteUrl(path, this.mobileUrl), this.absoluteUrl(path, this.baseUrl)]
         let lastError = ""
         for (const url of [...new Set(urls)]) {
             try {
@@ -95,13 +98,15 @@ class Mh160mh extends ComicSource {
 
     imageUrl(node, parent = this.baseUrl) {
         if (!node) return ""
-        for (const key of ["data-original", "data-src", "data-lazy-src", "data-url", "data-echo", "src"]) {
+        for (const key of ["data-original", "data-src", "data-lazy-src", "data-url", "data-echo", "data-img", "data-cover", "data-ks-lazyload", "src"]) {
             const url = this.absoluteUrl(this.attr(node, key), parent)
             if (url && !/\/(?:loading|blank|placeholder|favicon|logo)(?:[._/-]|$)/i.test(url)) return url
         }
         const srcset = this.attr(node, "srcset")
         if (srcset) return this.absoluteUrl(srcset.split(",")[0].trim().split(/\s+/)[0], parent)
-        return ""
+        const style = this.attr(node, "style")
+        const match = style.match(/(?:background(?:-image)?)\s*:[^;]*url\(\s*['"]?([^'")]+)['"]?\s*\)/i)
+        return match ? this.absoluteUrl(match[1], parent) : ""
     }
 
     findCover(link, parent) {
@@ -111,13 +116,19 @@ class Mh160mh extends ComicSource {
             const url = this.imageUrl(image, parent)
             if (url) return url
         }
+        // 該站封面有時和文字連結是同一列表卡片中的兄弟節點。
+        for (const selector of [".mh-date-bgpic img", "[class*='cover'] img", "[class*='pic'] img", "img"]) {
+            const img = link.parent?.querySelector?.(selector)
+            const url = this.imageUrl(img, parent)
+            if (url) return url
+        }
         return ""
     }
 
     parseComicList(doc, pageUrl = this.baseUrl, limit = 60) {
         const found = new Map()
         for (const link of doc.querySelectorAll("a[href*='/kanmanhua/']")) {
-            const id = this.comicId(this.attr(link, "href"))
+            const id = this.comicId(this.absoluteUrl(this.attr(link, "href"), pageUrl))
             if (!id) continue
             const title = this.text(link) || this.attr(link, "title") || this.attr(link.querySelector?.("img"), "alt")
             if (!title || title.length > 100 || /^(?:开始阅读|查看更多|立即阅读|阅读|更多)$/i.test(title)) continue
@@ -130,7 +141,7 @@ class Mh160mh extends ComicSource {
             })
         }
         return [...found.values()].slice(0, limit).map(item => new Comic({
-            id: item.id, title: item.title, cover: item.cover, subTitle: "",
+            id: item.id, title: item.title, cover: item.cover || this.fallbackCover, subTitle: "",
         }))
     }
 
@@ -259,10 +270,12 @@ class Mh160mh extends ComicSource {
         enableTagsSuggestions: false,
     }
 
-    parseChapterLinks(doc, comicId = null) {
+    parseChapterLinks(doc, comicId = null, pageUrl = this.mobileUrl) {
         const entries = new Map()
-        for (const link of doc.querySelectorAll("a[href*='/kanmanhua/']")) {
-            const id = this.episodeId(this.attr(link, "href"))
+        // 包含詳情頁內的相對章節網址，例如 1689580801.html。
+        for (const link of doc.querySelectorAll("a[href]")) {
+            const href = this.absoluteUrl(this.attr(link, "href"), pageUrl)
+            const id = this.episodeId(href)
             if (!id || (comicId && !id.startsWith(`${comicId}/`)) || entries.has(id)) continue
             const title = this.text(link) || `章節 ${id.split("/")[1].replace(/\.html$/, "")}`
             if (/^(?:上一话|下一话|上一章|下一章|阅读|开始阅读)$/i.test(title)) continue
@@ -276,8 +289,8 @@ class Mh160mh extends ComicSource {
         const title = this.text(doc.querySelector("h1")) || this.text(doc.querySelector("h2")) ||
             this.attr(doc.querySelector('meta[property="og:title"]'), "content") || id
         const cover = this.absoluteUrl(this.attr(doc.querySelector('meta[property="og:image"]'), "content"), url) ||
-            this.imageUrl(doc.querySelector(".detail img, .comic-cover img, .book-cover img"), url) ||
-            this.imageUrl(doc.querySelector("img[alt]"), url)
+            this.imageUrl(doc.querySelector(".mh-date-bgpic img, .detail img, .comic-cover img, .book-cover img"), url) ||
+            this.imageUrl(doc.querySelector("img[alt]"), url) || this.fallbackCover
         let description = ""
         for (const selector of ["[class*='intro']", "[class*='desc']", "[class*='summary']", "meta[name='description']"]) {
             const item = doc.querySelector(selector)
@@ -292,12 +305,37 @@ class Mh160mh extends ComicSource {
         if (author && author !== "未知") tags["作者"] = [author]
         if (status) tags["狀態"] = [status]
         if (genre) tags["題材"] = genre.split(/[,，/]/).filter(Boolean)
-        return new ComicDetails({ title, subTitle: author, cover, description, tags, chapters: this.parseChapterLinks(doc, id), url })
+        return new ComicDetails({ title, subTitle: author, cover, description, tags, chapters: this.parseChapterLinks(doc, id, url), url })
+    }
+
+    decodeMh160Images(html) {
+        // 漫畫160 把章節圖片路徑序列以 Base64 包在 qTcms_S_m_murl_e。
+        // 已有公開漫畫160 使用者腳本以相同資料欄位解碼，不執行網頁 JS。
+        const raw = String(html || "")
+        const imageMatch = raw.match(/\bqTcms_S_m_murl_e\s*=\s*["']([^"']+)["']/i)
+        if (!imageMatch) return []
+        const comicPageMatch = raw.match(/\bqTcms_S_p_id\s*=\s*["']?(\d+)/i)
+        const imageId = Number(comicPageMatch?.[1] || 0)
+        let decoded = ""
+        try { decoded = Convert.decodeUtf8(Convert.decodeBase64(imageMatch[1])) }
+        catch (error) { throw `漫畫160 Base64 圖片路徑解碼失敗：${error}` }
+        const primaryHost = imageId > 542724 ? "https://xwdf.tgmhfc.uk" : "https://mhpic6.tgmhfc.uk"
+        const paths = decoded.split("$qingtiandy$").map(x => x.trim()).filter(Boolean)
+        const results = []
+        for (const path of paths) {
+            if (path.startsWith("//")) results.push("https:" + path)
+            else if (path.startsWith("/")) results.push(primaryHost + path)
+            else if (/^https?:\/\//i.test(path)) results.push(path)
+        }
+        return results
     }
 
     extractImages(doc, html, pageUrl) {
         const results = []
         const seen = new Set()
+        // 先使用本站真正的 Base64 章節資料；其內圖片不出現在一般 img 標籤。
+        const mh160Images = this.decodeMh160Images(html)
+        if (mh160Images.length) return mh160Images
         const add = candidate => {
             const url = this.absoluteUrl(String(candidate || "").replace(/\\\//g, "/").replace(/\\u002f/gi, "/"), pageUrl)
             if (!url || seen.has(url) || !/^https?:\/\//i.test(url)) return
@@ -354,11 +392,11 @@ class Mh160mh extends ComicSource {
         onImageLoad: (url, comicId, epId) => ({
             headers: {
                 "user-agent": this.userAgent,
-                "referer": epId ? this.epUrl(epId) : this.comicUrl(comicId),
+                "referer": `${this.mobileUrl}/`,
                 "accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
             },
         }),
-        onThumbnailLoad: (url) => ({ headers: { "user-agent": this.userAgent, "referer": `${this.baseUrl}/` } }),
+        onThumbnailLoad: (url) => ({ headers: { "user-agent": this.userAgent, "referer": `${this.mobileUrl}/` } }),
         link: {
             domains: ["www.mh160mh.com", "m.mh160mh.com", "mh160mh.com"],
             linkToId: url => this.comicId(url),

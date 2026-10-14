@@ -2,12 +2,12 @@
 
 - 來源網站：<https://m.mh160mh.com/>，桌面備援：<https://www.mh160mh.com/>
 - 來源識別碼（key）：`mh160mh`
-- 測試版：`0.1.1`，最低 Venera 版本：`1.6.0`
+- 測試版：`0.1.2`，最低 Venera 版本：`1.6.0`
 - 檔案：`mh160mh.js`、`index.json`
 
 ## 狀態
 
-這是可匯入 Venera 的**實作初版**，尚未通過 Venera App + 實際網站章節圖片的端對端驗證。網站在目前執行環境中無法直接使用 HTTP 取得完整的原始章節 HTML，因此程式先支援常見的 `img` lazy-load 與 JavaScript 陣列格式，不會把未取得的圖片臆造為有效內容。
+這是可匯入 Venera 的**v0.1.2 修正版**，尚未通過 Venera App + 實際網站章節圖片的端對端驗證。網站在目前執行環境中無法直接使用 HTTP 取得完整的原始章節 HTML，因此程式先支援常見的 `img` lazy-load 與 JavaScript 陣列格式，不會把未取得的圖片臆造為有效內容。
 
 | 功能 | 實作 | 驗證情況 |
 | --- | --- | --- |
@@ -16,7 +16,7 @@
 | 題材、地區分類 | `rexue/`, `zaixian_dlmh/` 等 | 部分規則確認；需 App 實測 |
 | 搜尋 | 自動解析搜尋 form 與備援路徑 | 搜尋 action 尚待確認 |
 | 漫畫詳情、章節列表 | `/kanmanhua/<slug>/` | 網站連結規則確認；需 App 實測 |
-| 章節圖片 | 解析 DOM lazy load / JS 字串陣列 | **未驗證；可能無法閱讀** |
+| 章節圖片 | 解析 `qTcms_S_m_murl_e` Base64 圖片路徑及 DOM lazy load | **已加入 Base64 路徑解碼；仍待 Venera 實際閱讀測試** |
 
 ## 安裝 / 測試
 
@@ -66,8 +66,12 @@ node --test tests/*.test.cjs
 
 本程式僅提供公開頁面解析，不含任何漫畫素材，也不包含認證繞過或圖片鏡像。使用時應遵守網站條款及內容授權。
 
-## 0.1.1 修復記錄
+## v0.1.2（2026-10-15）問題修正
 
-- 修正倉庫 `index.json`：改用 Venera 官方配置倉庫的 `fileName` 欄位，補齊 `key`。
-- 請使用 `index.json` 的連結新增漫畫源倉庫；單獨匯入 JS 時請選擇 `mh160mh.js`。
-- 匯入問題修復仍需由 Venera App 實測確認；搜尋、圖片解析尚未端到端驗證。
+- 依據 `log.txt` 修正縮圖空 URL 所造成的 `relative URL without a base`：若缺失原始封面，使用倉庫內 `assets/no-cover.png` 當作可辨識的保底封面。
+- 依據公開漫畫160腳本，章節圖片解析 `qTcms_S_m_murl_e`、`qTcms_S_p_id`；以 Venera 的 `Convert.decodeBase64` / `Convert.decodeUtf8` 解碼 `$qingtiandy$` 分隔路徑並套用站點圖片 CDN。
+- 優先請求 `m.mh160mh.com`，解析相對章節連結，圖片使用手機站 Referer。
+- 倉庫 `index.json` 改用官方文件明確支援的 `url` 欄位（避免匯入 UI 因找不到 URL 出錯）。
+- 本環境無法直接連線源站，實機仍可能遇到 CDN 限制。遇到頁面無法載入請保留新日誌供確認。
+
+參考：<https://github.com/venera-app/venera/blob/master/doc/comic_source.md>、<https://openuserjs.org/scripts/zsyjklive.cn/ComicLooms/source>。

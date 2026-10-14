@@ -16,6 +16,10 @@ const sandbox = {
     get: async (url, headers) => { requests.push({ url, headers }); return responder(url) },
     post: async () => { throw Error('POST disabled in mock') }
   },
+  Convert: {
+    decodeBase64: input => Uint8Array.from(Buffer.from(input, 'base64')),
+    decodeUtf8: buffer => Buffer.from(buffer).toString('utf8'),
+  },
   console,
 }
 vm.createContext(sandbox)
@@ -89,17 +93,47 @@ test('圖片只解析符合格式的網址，不執行 HTML 裡的 JS', () => {
   assert.equal(src.extractImages(emptyDoc, '<div>no image</div>', src.baseUrl).length, 0)
 })
 
-test('檢查桌面網域失敗時是否切到行動網域', async () => {
+test('行動版網域優先於桌面站', async () => {
   requests.length = 0
   responder = url => url.includes('www.') ? { status: 404, body: '' } : { status: 200, body: '<html>ok</html>' }
   const page = await src.getPage('/kanmanhua/12094/')
   assert.equal(page.url, 'https://m.mh160mh.com/kanmanhua/12094/')
-  assert.equal(requests.length, 2)
+  assert.equal(requests.length, 1)
 })
 
 test('index.json 的離線基本格式', () => {
   const entries = JSON.parse(fs.readFileSync(path.join(__dirname, '../index.json'), 'utf8'))
   assert.equal(entries.length, 1)
-  assert.equal(entries[0].filename, 'mh160mh.js')
+  assert.equal(entries[0].url, 'https://raw.githubusercontent.com/valvenis201/venera-guazimanhua/mh160mh/mh160mh.js')
   assert.equal(entries[0].version, src.version)
+})
+
+test('Base64 章節圖片解碼：新站 CDN，保留圖片順序', () => {
+  const imgPaths = ['/comic/123/1.jpg', '/comic/123/2.jpg']
+  const payload = Buffer.from(imgPaths.join('$qingtiandy$')).toString('base64')
+  const html = `<script>var qTcms_S_m_murl_e="${payload}";var qTcms_S_p_id="542725";</script>`
+  const doc = { querySelectorAll: () => [] }
+  assert.deepEqual(Array.from(src.extractImages(doc, html, 'https://m.mh160mh.com/kanmanhua/12094/1.html')), [
+    'https://xwdf.tgmhfc.uk/comic/123/1.jpg',
+    'https://xwdf.tgmhfc.uk/comic/123/2.jpg'
+  ])
+})
+
+test('Base64 章節圖片解碼：舊站 CDN 與非 ASCII 資料', () => {
+  const payload = Buffer.from('/漫画/第一话/1.jpg').toString('base64')
+  const html = `<script>qTcms_S_m_murl_e='${payload}'; qTcms_S_p_id='100';</script>`
+  assert.deepEqual(Array.from(src.decodeMh160Images(html)), ['https://mhpic6.tgmhfc.uk/漫画/第一话/1.jpg'])
+})
+
+test('未取得封面網址時使用有效 HTTPS 預設封面，不傳遞空字串', () => {
+  const comics = src.parseComicList(docWithLinks([anchor('/kanmanhua/12094/', '風起蒼嵐')]))
+  assert.equal(comics[0].cover, 'https://raw.githubusercontent.com/valvenis201/venera-guazimanhua/mh160mh/assets/no-cover.png')
+})
+
+test('相對章節連結可以解析', () => {
+  const doc = {
+    querySelectorAll: selector => selector === 'a[href]' ? [anchor('123.html','第一話'),anchor('124.html','第二話')] : []
+  }
+  const result = src.parseChapterLinks(doc, 'abc', 'https://m.mh160mh.com/kanmanhua/abc/')
+  assert.deepEqual([...result.keys()], ['abc/124.html','abc/123.html'])
 })
